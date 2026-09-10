@@ -1,0 +1,149 @@
+#!/bin/sh
+
+# PROVIDE: f2bguard
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="f2bguard"
+rcvar="f2bguard_enable"
+required_files="/usr/local/etc/f2bguard/config.json"
+helper_pidfile="/var/run/f2bguard/helper.pid"
+server_pidfile="/var/run/f2bguard/server.pid"
+helper_socket="/var/run/f2bguard/pf.sock"
+config_file="/usr/local/etc/f2bguard/config.json"
+whitelist_file="/usr/local/etc/f2bguard/whitelist.txt"
+python="%%PYTHON_CMD%%"
+PYTHONPATH="/usr/local/share/f2bguard"
+export PYTHONPATH
+
+load_rc_config "${name}"
+: ${f2bguard_enable:="NO"}
+
+f2bguard_config_enabled()
+{
+	[ -r "${config_file}" ] || return 1
+	/usr/bin/grep -Eq '"enabled"[[:space:]]*:[[:space:]]*true' "${config_file}"
+}
+
+f2bguard_pid_running()
+{
+	_pidfile="$1"
+	[ -r "${_pidfile}" ] || return 1
+	_pid=$(/bin/cat "${_pidfile}" 2>/dev/null)
+	case "${_pid}" in
+		''|*[!0-9]*) return 1 ;;
+	esac
+	/bin/kill -0 "${_pid}" 2>/dev/null || return 1
+	/bin/ps -p "${_pid}" -o command= 2>/dev/null | /usr/bin/grep -Eq 'f2bguard\.(server|pf_helper)'
+}
+
+f2bguard_wait_running()
+{
+	_pidfile="$1"
+	# Let daemon finish exec and give an immediately failing child time to exit
+	# before treating the PID file as evidence of a successful start.
+	/bin/sleep 1
+	_i=0
+	while [ "${_i}" -lt 5 ]; do
+		f2bguard_pid_running "${_pidfile}" && return 0
+		/bin/sleep 1
+		_i=$((_i + 1))
+	done
+	return 1
+}
+
+f2bguard_prepare_dirs()
+{
+	/bin/mkdir -p /var/run/f2bguard /usr/local/etc/f2bguard/tls || return 1
+	/usr/sbin/chown root:f2bguard /var/run/f2bguard /usr/local/etc/f2bguard /usr/local/etc/f2bguard/tls || return 1
+	/bin/chmod 0750 /var/run/f2bguard /usr/local/etc/f2bguard /usr/local/etc/f2bguard/tls || return 1
+}
+
+f2bguard_reload_filter()
+{
+	# The package callback declares the tables/rules during pfSense filter
+	# generation. The daemon/helper then restore desired table contents.
+	[ -x /etc/rc.filter_configure_sync ] && /etc/rc.filter_configure_sync
+}
+
+f2bguard_start()
+{
+	f2bguard_config_enabled || {
+		/usr/bin/logger -p daemon.info -t f2bguard "Service is disabled in package configuration."
+		return 0
+	}
+	f2bguard_prepare_dirs || return 1
+	[ -x "${python}" ] || return 1
+	[ -r "${whitelist_file}" ] || {
+		/usr/bin/logger -p daemon.err -t f2bguard "Whitelist snapshot is missing; service not started."
+		return 1
+	}
+	# Generate the package-owned table declarations before launching the
+	# processes. The backend/helper then populate those declarations from the
+	# durable state as they start.
+	f2bguard_reload_filter || return 1
+
+	if ! f2bguard_pid_running "${helper_pidfile}"; then
+		/usr/sbin/daemon -S -l daemon -s info -T f2bguard-helper -f -p "${helper_pidfile}" "${python}" -m f2bguard.pf_helper --socket "${helper_socket}" --whitelist "${whitelist_file}" --user f2bguard || return 1
+		f2bguard_wait_running "${helper_pidfile}" || {
+			/usr/bin/logger -p daemon.err -t f2bguard "PF helper failed its startup check."
+			f2bguard_stop_process "${helper_pidfile}"
+			return 1
+		}
+	fi
+	if ! f2bguard_pid_running "${server_pidfile}"; then
+		/usr/sbin/daemon -S -l daemon -s info -T f2bguard-server -f -p "${server_pidfile}" -u f2bguard /usr/bin/env PYTHONPATH=/usr/local/share/f2bguard "${python}" -m f2bguard.server --config "${config_file}" || return 1
+		f2bguard_wait_running "${server_pidfile}" || {
+			/usr/bin/logger -p daemon.err -t f2bguard "API server failed its startup check; stopping partial service."
+			f2bguard_stop_process "${server_pidfile}"
+			f2bguard_stop_process "${helper_pidfile}"
+			return 1
+		}
+	fi
+}
+
+f2bguard_stop_process()
+{
+	_pidfile="$1"
+	[ -r "${_pidfile}" ] || return 0
+	_pid=$(/bin/cat "${_pidfile}" 2>/dev/null)
+	case "${_pid}" in
+		''|*[!0-9]*) /bin/rm -f "${_pidfile}"; return 0 ;;
+	esac
+	/bin/ps -p "${_pid}" -o command= 2>/dev/null | /usr/bin/grep -Eq 'f2bguard\.(server|pf_helper)' || {
+		/bin/rm -f "${_pidfile}"
+		return 0
+	}
+	/bin/kill "${_pid}" 2>/dev/null || true
+	_i=0
+	while f2bguard_pid_running "${_pidfile}" && [ "${_i}" -lt 10 ]; do
+		/bin/sleep 1
+		_i=$((_i + 1))
+	done
+	if f2bguard_pid_running "${_pidfile}"; then
+		/usr/bin/logger -p daemon.err -t f2bguard "Process did not stop; refusing to remove its PID file."
+		return 1
+	fi
+	/bin/rm -f "${_pidfile}"
+}
+
+f2bguard_stop()
+{
+	f2bguard_stop_process "${server_pidfile}" || return 1
+	f2bguard_stop_process "${helper_pidfile}" || return 1
+	# Leave package-owned table contents untouched. A later supported filter
+	# reload or service start will recreate declarations and apply state.
+}
+
+f2bguard_status()
+{
+	f2bguard_pid_running "${server_pidfile}" && f2bguard_pid_running "${helper_pidfile}"
+}
+
+start_cmd="f2bguard_start"
+stop_cmd="f2bguard_stop"
+status_cmd="f2bguard_status"
+
+run_rc_command "$1"

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<pfsensepkgs>
+  <package>
+    <name>Fail2Ban Guard</name>
+    <internal_name>f2bguard</internal_name>
+    <descr><![CDATA[Fail2Ban Guard mTLS event receiver and PF table integration.]]></descr>
+    <version>%%PKGVERSION%%</version>
+    <configurationfile>f2bguard.xml</configurationfile>
+    <category>security</category>
+    <required_version>2.9</required_version>
+  </package>
+</pfsensepkgs>

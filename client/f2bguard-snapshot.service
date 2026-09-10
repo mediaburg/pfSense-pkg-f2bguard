@@ -1,0 +1,15 @@
+[Unit]
+Description=Reconcile permanent Fail2Ban bans with pfSense Fail2Ban Guard
+After=fail2ban.service
+Requires=fail2ban.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/lib/f2bguard/client/sender.py --config /usr/local/etc/f2bguard-sender.json snapshot
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/db/f2bguard
+ReadOnlyPaths=/usr/local/etc/f2bguard-sender.json

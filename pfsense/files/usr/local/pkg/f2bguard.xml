@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE packagegui SYSTEM "../schema/packages.dtd">
+<packagegui>
+  <name>f2bguard</name>
+  <title>Services: Fail2Ban Guard</title>
+  <include_file>/usr/local/pkg/f2bguard.inc</include_file>
+  <configpath>installedpackages-&gt;f2bguard-&gt;config-&gt;0</configpath>
+  <menu>
+    <name>Fail2Ban Guard</name>
+    <section>Services</section>
+    <url>/f2bguard.php</url>
+    <tooltiptext>Configure the Fail2Ban Guard event receiver</tooltiptext>
+  </menu>
+  <tabs>
+    <tab><text>General</text><url>/f2bguard.php</url><active/><tab_level>1</tab_level></tab>
+    <tab><text>Clients</text><url>/f2bguard_clients.php</url><tab_level>1</tab_level></tab>
+    <tab><text>Jails</text><url>/f2bguard_jails.php</url><tab_level>1</tab_level></tab>
+    <tab><text>Status</text><url>/f2bguard_status.php</url><tab_level>1</tab_level></tab>
+  </tabs>
+  <service>
+    <name>f2bguard</name>
+    <rcfile>f2bguard</rcfile>
+    <executable>%%PYTHON_CMD%%</executable>
+    <description>Fail2Ban Guard receiver and PF enforcement</description>
+  </service>
+  <custom_php_install_command>f2bguard_install();</custom_php_install_command>
+  <custom_php_pre_deinstall_command>f2bguard_pre_deinstall();</custom_php_pre_deinstall_command>
+  <custom_php_deinstall_command>f2bguard_deinstall();</custom_php_deinstall_command>
+  <custom_php_resync_config_command>f2bguard_resync_config();</custom_php_resync_config_command>
+  <filter_rules_needed>f2bguard_generate_rules</filter_rules_needed>
+</packagegui>

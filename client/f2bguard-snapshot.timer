@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic Fail2Ban Guard permanent-ban reconciliation
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+Unit=f2bguard-snapshot.service
+
+[Install]
+WantedBy=timers.target

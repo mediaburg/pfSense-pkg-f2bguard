@@ -1,0 +1,17 @@
+etc/rc.d/f2bguard
+pkg/f2bguard.inc
+pkg/f2bguard.xml
+share/pfSense-pkg-f2bguard/info.xml
+share/f2bguard/f2bguard/__init__.py
+share/f2bguard/f2bguard/config.py
+share/f2bguard/f2bguard/networks.py
+share/f2bguard/f2bguard/pf_helper.py
+share/f2bguard/f2bguard/server.py
+share/f2bguard/f2bguard/store.py
+www/f2bguard.php
+www/f2bguard_clients.php
+www/f2bguard_jails.php
+www/f2bguard_status.php
+@cwd /
+etc/inc/priv/f2bguard.priv.inc
+@cwd %%PREFIX%%

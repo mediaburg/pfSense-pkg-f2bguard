@@ -1,0 +1,20 @@
+[Unit]
+Description=pfSense Fail2Ban Guard sender
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/lib/f2bguard/client/sender.py --config /usr/local/etc/f2bguard-sender.json worker
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/db/f2bguard
+ReadOnlyPaths=/usr/local/etc/f2bguard-sender.json
+
+[Install]
+WantedBy=multi-user.target

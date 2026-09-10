@@ -1,0 +1,58 @@
+name: Validate and build package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Install PHP CLI
+        run: sudo apt-get update && sudo apt-get install --yes php-cli
+      - name: Run checks
+        run: python3 tools/check.py --require-php
+
+  package:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Install QEMU and cloud image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cloud-image-utils openssh-client qemu-system-x86 qemu-utils xz-utils
+          if [ -e /dev/kvm ]; then sudo chmod 0666 /dev/kvm; fi
+      - name: Build in FreeBSD 16 with pfSense ports
+        env:
+          ARTIFACT_DIR: ${{ github.workspace }}/artifacts
+        run: sh tools/ci_freebsd16_package.sh
+      - name: Upload native package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pfSense-pkg-f2bguard-FreeBSD16
+          path: |
+            artifacts/pfSense-pkg-f2bguard-*.pkg
+            artifacts/pfSense-pkg-f2bguard-*.pkg.sha256
+            artifacts/BUILD-PROVENANCE.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
