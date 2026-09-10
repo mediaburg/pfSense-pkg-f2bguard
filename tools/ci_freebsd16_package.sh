@@ -78,8 +78,14 @@ until ssh $common_opts -p 2222 ci@127.0.0.1 true 2>/dev/null; do
 	[ "$i" -lt 120 ] || { /bin/cat "$work/console.log" >&2; exit 1; }
 	sleep 2
 done
-ssh $common_opts -p 2222 ci@127.0.0.1 cloud-init status --wait
-ssh $common_opts -p 2222 ci@127.0.0.1 sudo -n true
+# FreeBSD BASIC-CLOUDINIT uses nuageinit, not the Linux cloud-init CLI.
+# SSH can become ready before nuageinit installs sudo in its post-network phase.
+i=0
+until ssh $common_opts -p 2222 ci@127.0.0.1 /usr/local/bin/sudo -n true 2>/dev/null; do
+	i=$((i + 1))
+	[ "$i" -lt 120 ] || { /bin/cat "$work/console.log" >&2; exit 1; }
+	sleep 5
+done
 
 scp $common_opts -P 2222 "$work/port.tar.gz" ci@127.0.0.1:/tmp/port.tar.gz
 ssh $common_opts -p 2222 ci@127.0.0.1 "PFSENSE_PORTS_COMMIT='$PFSENSE_PORTS_COMMIT' sh -s" <<'EOF'
